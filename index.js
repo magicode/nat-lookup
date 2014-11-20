@@ -2,7 +2,7 @@
 
 var addon = require('./build/Release/natlookup.node');
 
-var nlp =  new addon.NatLookup();
+var nlp =  addon;
 
 
 function getOrginalDst(socket,cb){

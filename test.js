@@ -4,6 +4,8 @@ var nlp = require('./');
 
 var net = require('net');
 
+
+
 var server = net.createServer().on('connection',function(socket){
 	console.log(socket._handle.fd);
 
@@ -17,6 +19,8 @@ var server = net.createServer().on('connection',function(socket){
 net.connect(6789, function(){
 	
 });
-net.connect(5555,"200.56.45.23", function(){
+
+// iptables -t nat -A OUTPUT -d 6.13.6.13 -p tcp -j REDIRECT --to-ports 6789
+net.connect(5555,"6.13.6.13", function(){
 	
 });
