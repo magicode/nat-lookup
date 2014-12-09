@@ -46,14 +46,14 @@ static void DetectWork(uv_work_t* req) {
 	Baton* baton = static_cast<Baton*>(req->data);
 
 	socklen_t len = sizeof(struct sockaddr_in);
-	printf("start nlp %d\n" , baton->fd);
+
 	if (getsockopt(baton->fd, SOL_IP, SO_ORIGINAL_DST, &baton->lookup, &len) != 0){
 		baton->success = false;
 		baton->errnum = errno;
 	} else {
 		baton->success = true;
 	}
-	printf("end nlp %d\n" , baton->fd);
+
 }
 
 static void DetectAfter(uv_work_t* req) {
