@@ -31,14 +31,11 @@ using namespace v8;
 
 
 struct Baton {
-	uv_work_t request;
 	Persistent<Function> callback;
-
 	struct sockaddr_in lookup;
 	int fd;
 	bool success;
 	int errnum;
-	//struct natlookup natLookup;
 };
 
 static void DetectWork(uv_work_t* req) {
@@ -47,7 +44,9 @@ static void DetectWork(uv_work_t* req) {
 
 	socklen_t len = sizeof(struct sockaddr_in);
 
-	if (getsockopt(baton->fd, SOL_IP, SO_ORIGINAL_DST, &baton->lookup, &len) != 0){
+	memset(&baton->lookup, 0, sizeof(baton->lookup));
+
+	if (getsockopt( baton->fd, SOL_IP, SO_ORIGINAL_DST, &baton->lookup, &len ) != 0){
 		baton->success = false;
 		baton->errnum = errno;
 	} else {
@@ -63,7 +62,7 @@ static void DetectAfter(uv_work_t* req) {
 	if (baton->success) {
 
 		const unsigned argc = 3;
-		Local<Value> argv[argc] = {
+		Handle<Value> argv[argc] = {
 			Local<Value>::New(Null()),
 			Local<Value>::New(String::New(inet_ntoa(baton->lookup.sin_addr))),
 			Local<Value>::New(Integer::New(ntohs(baton->lookup.sin_port))),
@@ -73,18 +72,17 @@ static void DetectAfter(uv_work_t* req) {
 		baton->callback->Call(Context::GetCurrent()->Global(), argc, argv);
 		if (try_catch.HasCaught())
 			FatalException(try_catch);
-	} else {
 
-		Local<Value> err ;
+	} else {
+		Handle<Value> err ;
 
 		if(baton->errnum != 0)
 			err = Exception::Error(String::New(strerror(baton->errnum)));
 		else
 			err = Exception::Error(String::New("error"));
 
-
 		const unsigned argc = 1;
-		Local<Value> argv[argc] = {err};
+		Handle<Value> argv[argc] = {err};
 
 		TryCatch try_catch;
 		baton->callback->Call(Context::GetCurrent()->Global(), argc, argv);
@@ -92,8 +90,11 @@ static void DetectAfter(uv_work_t* req) {
 			FatalException(try_catch);
 	}
 
+
+
 	baton->callback.Dispose();
 	delete baton;
+	delete req;
 }
 
 
@@ -101,39 +102,30 @@ static void DetectAfter(uv_work_t* req) {
 static Handle<Value> natLookup(const Arguments& args) {
 	HandleScope scope;
 
-	if (args.Length() < 4) {
+	if (args.Length() < 2) {
 		return ThrowException(
-				Exception::TypeError(String::New("Expecting 4 arguments")));
+				Exception::TypeError(String::New("Expecting 2 arguments")));
 	}
 
-	if (!args[3]->IsFunction()) {
+	if (!args[1]->IsFunction()) {
 		return ThrowException(
 				Exception::TypeError(
 						String::New(
-								"4 argument must be a callback function")));
+								"2 argument must be a callback function")));
 	}
 
-	Local<Function> callback = Local<Function>::Cast(args[3]);
+	Local<Function> callback = Local<Function>::Cast(args[1]);
 
-	Baton* baton = new Baton();
-	baton->request.data = baton;
+	uv_work_t *req  = new uv_work_t;
+	Baton* baton = new Baton;
+	req->data = baton;
 	baton->callback = Persistent < Function > ::New(callback);
 	baton->success = false;
 	baton->errnum = 0;
 
-	memset(&baton->lookup, 0, sizeof(baton->lookup));
-
-
 	baton->fd = args[0]->IntegerValue();
-	baton->lookup.sin_port = htons((u_short)args[1]->IntegerValue());
-	baton->lookup.sin_addr.s_addr = inet_addr((const char*)(* String::AsciiValue( args[2]->ToString()) ));
 
-
-
-	int status = uv_queue_work(uv_default_loop(),
-	&baton->request,
-	DetectWork,
-	(uv_after_work_cb)DetectAfter);
+	int status = uv_queue_work(uv_default_loop(), req, DetectWork, (uv_after_work_cb)DetectAfter );
 
 	assert(status == 0);
 	return Undefined();
