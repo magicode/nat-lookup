@@ -38,27 +38,27 @@ struct Baton {
 	int errnum;
 };
 
-static void DetectWork(uv_work_t* req) {
+void NatLookupWork(uv_work_t* req) {
 
 	Baton* baton = static_cast<Baton*>(req->data);
 
 	socklen_t len = sizeof(struct sockaddr_in);
-
+	printf("nlp 4 :: %d\n" ,  baton->fd );
 	memset(&baton->lookup, 0, sizeof(baton->lookup));
 
-	if (getsockopt( baton->fd, SOL_IP, SO_ORIGINAL_DST, &baton->lookup, &len ) != 0){
+	if (getsockopt( baton->fd, IPPROTO_IP, SO_ORIGINAL_DST, &baton->lookup, &len ) != 0){
 		baton->success = false;
 		baton->errnum = errno;
 	} else {
 		baton->success = true;
 	}
-
+	printf("nlp 5 :: %d\n" ,  baton->fd );
 }
 
-static void DetectAfter(uv_work_t* req) {
-	HandleScope scope;
-	Baton* baton = static_cast<Baton*>(req->data);
+void NatLookupAfter(uv_work_t* req) {
 
+	Baton* baton = static_cast<Baton*>(req->data);
+	printf("nlp 6 :: %d\n" ,  baton->fd );
 	if (baton->success) {
 
 		const unsigned argc = 3;
@@ -91,15 +91,17 @@ static void DetectAfter(uv_work_t* req) {
 	}
 
 
-
+	printf("nlp 7 :: %d\n" ,  baton->fd );
 	baton->callback.Dispose();
 	delete baton;
 	delete req;
+
+	printf("nlp 8 :: %d\n" ,  baton->fd );
 }
 
 
 
-static Handle<Value> natLookup(const Arguments& args) {
+Handle<Value> natLookup(const Arguments& args) {
 	HandleScope scope;
 
 	if (args.Length() < 2) {
@@ -125,10 +127,14 @@ static Handle<Value> natLookup(const Arguments& args) {
 
 	baton->fd = args[0]->IntegerValue();
 
-	int status = uv_queue_work(uv_default_loop(), req, DetectWork, (uv_after_work_cb)DetectAfter );
 
-	assert(status == 0);
-	return Undefined();
+	printf("nlp 2 :: %d\n" ,  baton->fd );
+
+	uv_queue_work(uv_default_loop(), req, NatLookupWork, (uv_after_work_cb)NatLookupAfter );
+
+	printf("nlp 3 :: %d\n" ,  baton->fd );
+
+	return scope.Close(v8::Undefined());
 
 }
 
@@ -136,8 +142,7 @@ static Handle<Value> natLookup(const Arguments& args) {
 extern "C" {
 	void init(Handle<Object> target) {
 		HandleScope scope;
-		target->Set(String::NewSymbol("natLookup"),
-								FunctionTemplate::New(natLookup)->GetFunction());
+		target->Set(String::NewSymbol("natLookup"), FunctionTemplate::New(natLookup)->GetFunction());
 	}
 
 	NODE_MODULE(natlookup, init);
