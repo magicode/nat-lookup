@@ -141,7 +141,6 @@ static Handle<Value> natLookup(const Arguments& args) {
 
 //extern "C" {
 	void init(Handle<Object> target) {
-		HandleScope scope;
 		target->Set(String::NewSymbol("natLookup"), FunctionTemplate::New(natLookup)->GetFunction());
 	}
 
