@@ -36,14 +36,15 @@ struct Baton {
 	int fd;
 	bool success;
 	int errnum;
+	int64_t idDebug;
 };
 
-void NatLookupWork(uv_work_t* req) {
+static void NatLookupWork(uv_work_t* req) {
 
 	Baton* baton = static_cast<Baton*>(req->data);
 
 	socklen_t len = sizeof(struct sockaddr_in);
-	printf("nlp 4 :: %d\n" ,  baton->fd );
+	printf("nlp-%ld-4-%d\n" , baton->idDebug , baton->fd );
 	memset(&baton->lookup, 0, sizeof(baton->lookup));
 
 	if (getsockopt( baton->fd, IPPROTO_IP, SO_ORIGINAL_DST, &baton->lookup, &len ) != 0){
@@ -52,13 +53,13 @@ void NatLookupWork(uv_work_t* req) {
 	} else {
 		baton->success = true;
 	}
-	printf("nlp 5 :: %d\n" ,  baton->fd );
+	printf("nlp-%ld-5-%d\n" , baton->idDebug , baton->fd );
 }
 
-void NatLookupAfter(uv_work_t* req) {
+static void NatLookupAfter(uv_work_t* req) {
 
 	Baton* baton = static_cast<Baton*>(req->data);
-	printf("nlp 6 :: %d\n" ,  baton->fd );
+	printf("nlp-%ld-6-%d\n" , baton->idDebug , baton->fd );
 	if (baton->success) {
 
 		const unsigned argc = 3;
@@ -91,17 +92,17 @@ void NatLookupAfter(uv_work_t* req) {
 	}
 
 
-	printf("nlp 7 :: %d\n" ,  baton->fd );
+	printf("nlp-%ld-7-%d\n" , baton->idDebug , baton->fd );
 	baton->callback.Dispose();
 	delete baton;
 	delete req;
 
-	printf("nlp 8 :: %d\n" ,  baton->fd );
+	printf("nlp-%ld-8-%d\n" , baton->idDebug , baton->fd );
 }
 
 
 
-Handle<Value> natLookup(const Arguments& args) {
+static Handle<Value> natLookup(const Arguments& args) {
 	HandleScope scope;
 
 	if (args.Length() < 2) {
@@ -116,34 +117,33 @@ Handle<Value> natLookup(const Arguments& args) {
 								"2 argument must be a callback function")));
 	}
 
-	Local<Function> callback = Local<Function>::Cast(args[1]);
 
 	uv_work_t *req  = new uv_work_t;
 	Baton* baton = new Baton;
 	req->data = baton;
-	baton->callback = Persistent < Function > ::New(callback);
+	baton->callback = Persistent < Function > ::New(Local<Function>::Cast(args[1]));
 	baton->success = false;
 	baton->errnum = 0;
 
-	baton->fd = args[0]->IntegerValue();
+	baton->fd = args[0]->Int32Value();
+	baton->idDebug = args[2]->IntegerValue();
 
-
-	printf("nlp 2 :: %d\n" ,  baton->fd );
+	printf("nlp-%ld-2-%d\n" , baton->idDebug , baton->fd );
 
 	uv_queue_work(uv_default_loop(), req, NatLookupWork, (uv_after_work_cb)NatLookupAfter );
 
-	printf("nlp 3 :: %d\n" ,  baton->fd );
+	printf("nlp-%ld-3-%d\n" , baton->idDebug , baton->fd );
 
 	return scope.Close(v8::Undefined());
 
 }
 
 
-extern "C" {
+//extern "C" {
 	void init(Handle<Object> target) {
 		HandleScope scope;
 		target->Set(String::NewSymbol("natLookup"), FunctionTemplate::New(natLookup)->GetFunction());
 	}
 
 	NODE_MODULE(natlookup, init);
-}
+//}
