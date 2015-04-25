@@ -30,6 +30,9 @@ using namespace v8;
 
 
 
+
+
+
 struct Baton {
 	Persistent<Function> callback;
 	struct sockaddr_in lookup;
@@ -39,12 +42,36 @@ struct Baton {
 	int64_t idDebug;
 };
 
+
+int64_t now(void) {
+
+    struct timespec tms;
+
+    /* The C11 way */
+    /* if (! timespec_get(&tms, TIME_UTC)) { */
+
+    /* POSIX.1-2008 way */
+    if (clock_gettime(CLOCK_REALTIME,&tms)) {
+        return -1;
+    }
+    /* seconds, multiplied with 1 million */
+    int64_t micros = tms.tv_sec * 1000000;
+    /* Add full microseconds */
+    micros += tms.tv_nsec/1000;
+    /* round up if necessary */
+    if (tms.tv_nsec % 1000 >= 500) {
+        ++micros;
+    }
+    return micros;
+}
+
+
 static void NatLookupWork(uv_work_t* req) {
 
 	Baton* baton = static_cast<Baton*>(req->data);
 
 	socklen_t len = sizeof(struct sockaddr_in);
-	printf("nlp-%ld-4-%d\n" , baton->idDebug , baton->fd );
+	printf("nlp-%ld-4-%d-%ld\n" , baton->idDebug , baton->fd , now());
 	memset(&baton->lookup, 0, sizeof(baton->lookup));
 
 	if (getsockopt( baton->fd, IPPROTO_IP, SO_ORIGINAL_DST, &baton->lookup, &len ) != 0){
@@ -53,13 +80,13 @@ static void NatLookupWork(uv_work_t* req) {
 	} else {
 		baton->success = true;
 	}
-	printf("nlp-%ld-5-%d\n" , baton->idDebug , baton->fd );
+	printf("nlp-%ld-5-%d-%ld\n" , baton->idDebug , baton->fd , now() );
 }
 
 static void NatLookupAfter(uv_work_t* req) {
 
 	Baton* baton = static_cast<Baton*>(req->data);
-	printf("nlp-%ld-6-%d\n" , baton->idDebug , baton->fd );
+	printf("nlp-%ld-6-%d-%ld\n" , baton->idDebug , baton->fd  , now());
 	if (baton->success) {
 
 		const unsigned argc = 3;
@@ -92,12 +119,12 @@ static void NatLookupAfter(uv_work_t* req) {
 	}
 
 
-	printf("nlp-%ld-7-%d\n" , baton->idDebug , baton->fd );
+	printf("nlp-%ld-7-%d-%ld\n" , baton->idDebug , baton->fd , now());
 	baton->callback.Dispose();
 	delete baton;
 	delete req;
 
-	printf("nlp-%ld-8-%d\n" , baton->idDebug , baton->fd );
+	printf("nlp-%ld-8-%d-%ld\n" , baton->idDebug , baton->fd , now());
 }
 
 
@@ -128,11 +155,11 @@ static Handle<Value> natLookup(const Arguments& args) {
 	baton->fd = args[0]->Int32Value();
 	baton->idDebug = args[2]->IntegerValue();
 
-	printf("nlp-%ld-2-%d\n" , baton->idDebug , baton->fd );
+	printf("nlp-%ld-2-%d-%ld\n" , baton->idDebug , baton->fd , now());
 
 	uv_queue_work(uv_default_loop(), req, NatLookupWork, (uv_after_work_cb)NatLookupAfter );
 
-	printf("nlp-%ld-3-%d\n" , baton->idDebug , baton->fd );
+	printf("nlp-%ld-3-%d-%ld\n" , baton->idDebug , baton->fd , now());
 
 	return scope.Close(v8::Undefined());
 
@@ -164,8 +191,6 @@ static Handle<Value> natLookupSync(const Arguments& args) {
 	} else {
 		obj->Set(String::New("ip"), Local<Value>::New(String::New(inet_ntoa(lookup.sin_addr))) );
 		obj->Set(String::New("port"), Local<Value>::New(Integer::New(ntohs(lookup.sin_port))) );
-
-
 	}
 
 	return scope.Close(obj);
