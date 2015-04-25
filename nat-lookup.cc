@@ -139,9 +139,43 @@ static Handle<Value> natLookup(const Arguments& args) {
 }
 
 
+static Handle<Value> natLookupSync(const Arguments& args) {
+	HandleScope scope;
+
+	if (args.Length() < 1) {
+		return ThrowException(
+				Exception::TypeError(String::New("Expecting 2 arguments")));
+	}
+
+	int fd = args[0]->Int32Value();
+
+	struct sockaddr_in lookup;
+
+	socklen_t len = sizeof(struct sockaddr_in);
+
+	memset(&lookup, 0, len );
+
+
+	Local<Object> obj = Object::New();
+
+	if (getsockopt( fd , IPPROTO_IP, SO_ORIGINAL_DST, &lookup, &len ) != 0){
+		obj->Set(String::New("error"), String::New( strerror( errno ) ) );
+
+	} else {
+		obj->Set(String::New("ip"), Local<Value>::New(String::New(inet_ntoa(lookup.sin_addr))) );
+		obj->Set(String::New("port"), Local<Value>::New(Integer::New(ntohs(lookup.sin_port))) );
+
+
+	}
+
+	return scope.Close(obj);
+}
+
+
 //extern "C" {
 	void init(Handle<Object> target) {
 		target->Set(String::NewSymbol("natLookup"), FunctionTemplate::New(natLookup)->GetFunction());
+		target->Set(String::NewSymbol("natLookupSync"), FunctionTemplate::New(natLookupSync)->GetFunction());
 	}
 
 	NODE_MODULE(natlookup, init);
