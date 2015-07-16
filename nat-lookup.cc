@@ -71,7 +71,7 @@ static void NatLookupWork(uv_work_t* req) {
 	Baton* baton = static_cast<Baton*>(req->data);
 
 	socklen_t len = sizeof(struct sockaddr_in);
-	printf("nlp-%ld-4-%d-%ld\n" , baton->idDebug , baton->fd , now());
+	//printf("nlp-%ld-4-%d-%ld\n" , baton->idDebug , baton->fd , now());
 	memset(&baton->lookup, 0, sizeof(baton->lookup));
 
 	if (getsockopt( baton->fd, IPPROTO_IP, SO_ORIGINAL_DST, &baton->lookup, &len ) != 0){
@@ -80,13 +80,13 @@ static void NatLookupWork(uv_work_t* req) {
 	} else {
 		baton->success = true;
 	}
-	printf("nlp-%ld-5-%d-%ld\n" , baton->idDebug , baton->fd , now() );
+	//printf("nlp-%ld-5-%d-%ld\n" , baton->idDebug , baton->fd , now() );
 }
 
 static void NatLookupAfter(uv_work_t* req) {
 
 	Baton* baton = static_cast<Baton*>(req->data);
-	printf("nlp-%ld-6-%d-%ld\n" , baton->idDebug , baton->fd  , now());
+	//printf("nlp-%ld-6-%d-%ld\n" , baton->idDebug , baton->fd  , now());
 	if (baton->success) {
 
 		const unsigned argc = 3;
@@ -119,12 +119,12 @@ static void NatLookupAfter(uv_work_t* req) {
 	}
 
 
-	printf("nlp-%ld-7-%d-%ld\n" , baton->idDebug , baton->fd , now());
+	//printf("nlp-%ld-7-%d-%ld\n" , baton->idDebug , baton->fd , now());
 	baton->callback.Dispose();
 	delete baton;
 	delete req;
 
-	printf("nlp-%ld-8-%d-%ld\n" , baton->idDebug , baton->fd , now());
+	//printf("nlp-%ld-8-%d-%ld\n" , baton->idDebug , baton->fd , now());
 }
 
 
@@ -155,11 +155,11 @@ static Handle<Value> natLookup(const Arguments& args) {
 	baton->fd = args[0]->Int32Value();
 	baton->idDebug = args[2]->IntegerValue();
 
-	printf("nlp-%ld-2-%d-%ld\n" , baton->idDebug , baton->fd , now());
+	//printf("nlp-%ld-2-%d-%ld\n" , baton->idDebug , baton->fd , now());
 
 	uv_queue_work(uv_default_loop(), req, NatLookupWork, (uv_after_work_cb)NatLookupAfter );
 
-	printf("nlp-%ld-3-%d-%ld\n" , baton->idDebug , baton->fd , now());
+	//printf("nlp-%ld-3-%d-%ld\n" , baton->idDebug , baton->fd , now());
 
 	return scope.Close(v8::Undefined());
 

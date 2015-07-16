@@ -8,7 +8,7 @@ module.exports.getOrginalDst = function getOrginalDst(socket,cb){
 	
 	var idDebug = Date.now();
 	
-	console.log('nlp-'+ idDebug +'-1-' + socket._handle.fd);
+	//console.log('nlp-'+ idDebug +'-1-' + socket._handle.fd);
 	nlp.natLookup( socket._handle.fd , cb  , idDebug );
 	
 	return idDebug;

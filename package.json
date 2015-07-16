@@ -1,6 +1,6 @@
 {
   "name": "nat-lookup",
-  "version": "0.1.3d",
+  "version": "0.1.5",
   "main": "index.js",
   "license": "",
   "gypfile": true
