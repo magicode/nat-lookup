@@ -1,4 +1,5 @@
 
+#include <nan.h>
 #include <node.h>
 #include <v8.h>
 
@@ -24,6 +25,7 @@
 #include <fcntl.h>
 #include <linux/netfilter_ipv4.h>
 #include <errno.h>
+#include <time.h>
 
 using namespace node;
 using namespace v8;
@@ -34,7 +36,7 @@ using namespace v8;
 
 
 struct Baton {
-	Persistent<Function> callback;
+	Nan::Callback *callback;
 	struct sockaddr_in lookup;
 	int fd;
 	bool success;
@@ -84,43 +86,45 @@ static void NatLookupWork(uv_work_t* req) {
 }
 
 static void NatLookupAfter(uv_work_t* req) {
-
+	Nan::HandleScope scope;
+	
 	Baton* baton = static_cast<Baton*>(req->data);
 	//printf("nlp-%ld-6-%d-%ld\n" , baton->idDebug , baton->fd  , now());
 	if (baton->success) {
 
 		const unsigned argc = 3;
-		Handle<Value> argv[argc] = {
-			Local<Value>::New(Null()),
-			Local<Value>::New(String::New(inet_ntoa(baton->lookup.sin_addr))),
-			Local<Value>::New(Integer::New(ntohs(baton->lookup.sin_port))),
+		Local<Value> argv[argc] = {
+			Nan::Null(),
+			Nan::New(inet_ntoa(baton->lookup.sin_addr)).ToLocalChecked(),
+			Nan::New(ntohs(baton->lookup.sin_port)),
 		};
 
-		TryCatch try_catch;
-		baton->callback->Call(Context::GetCurrent()->Global(), argc, argv);
+		Nan::TryCatch try_catch;
+		baton->callback->Call(Nan::GetCurrentContext()->Global(), argc, argv);
 		if (try_catch.HasCaught())
-			FatalException(try_catch);
+			Nan::FatalException(try_catch);
 
 	} else {
-		Handle<Value> err ;
+		Local<Value> err ;
 
 		if(baton->errnum != 0)
-			err = Exception::Error(String::New(strerror(baton->errnum)));
+			err = Exception::Error(Nan::New(strerror(baton->errnum)).ToLocalChecked());
 		else
-			err = Exception::Error(String::New("error"));
+			err = Exception::Error(Nan::New("error").ToLocalChecked());
 
 		const unsigned argc = 1;
-		Handle<Value> argv[argc] = {err};
+		Local<Value> argv[argc] = {err};
 
-		TryCatch try_catch;
-		baton->callback->Call(Context::GetCurrent()->Global(), argc, argv);
+		Nan::TryCatch try_catch;
+		baton->callback->Call(Nan::GetCurrentContext()->Global(), argc, argv);
 		if (try_catch.HasCaught())
-			FatalException(try_catch);
+			Nan::FatalException(try_catch);
 	}
 
 
 	//printf("nlp-%ld-7-%d-%ld\n" , baton->idDebug , baton->fd , now());
-	baton->callback.Dispose();
+	//baton->callback->Dispose();
+	delete baton->callback;
 	delete baton;
 	delete req;
 
@@ -129,31 +133,27 @@ static void NatLookupAfter(uv_work_t* req) {
 
 
 
-static Handle<Value> natLookup(const Arguments& args) {
-	HandleScope scope;
+NAN_METHOD(natLookup) {
+	Nan::HandleScope scope;
 
-	if (args.Length() < 2) {
-		return ThrowException(
-				Exception::TypeError(String::New("Expecting 2 arguments")));
+	if (info.Length() < 2) {
+		return Nan::ThrowError("Expecting 2 arguments");
 	}
 
-	if (!args[1]->IsFunction()) {
-		return ThrowException(
-				Exception::TypeError(
-						String::New(
-								"2 argument must be a callback function")));
+	if (!info[1]->IsFunction()) {
+		return Nan::ThrowError("2 argument must be a callback function");
 	}
 
 
 	uv_work_t *req  = new uv_work_t;
 	Baton* baton = new Baton;
 	req->data = baton;
-	baton->callback = Persistent < Function > ::New(Local<Function>::Cast(args[1]));
+	baton->callback = new Nan::Callback(info[1].As<v8::Function>());
 	baton->success = false;
 	baton->errnum = 0;
 
-	baton->fd = args[0]->Int32Value();
-	baton->idDebug = args[2]->IntegerValue();
+	baton->fd = info[0]->Int32Value();
+	baton->idDebug = info[2]->IntegerValue();
 
 	//printf("nlp-%ld-2-%d-%ld\n" , baton->idDebug , baton->fd , now());
 
@@ -161,20 +161,18 @@ static Handle<Value> natLookup(const Arguments& args) {
 
 	//printf("nlp-%ld-3-%d-%ld\n" , baton->idDebug , baton->fd , now());
 
-	return scope.Close(v8::Undefined());
-
+	info.GetReturnValue().SetUndefined();
 }
 
 
-static Handle<Value> natLookupSync(const Arguments& args) {
-	HandleScope scope;
+NAN_METHOD(natLookupSync) {
+	Nan::HandleScope scope;
 
-	if (args.Length() < 1) {
-		return ThrowException(
-				Exception::TypeError(String::New("Expecting 2 arguments")));
+	if (info.Length() < 1) {
+		return  Nan::ThrowError("Expecting 2 arguments");
 	}
 
-	int fd = args[0]->Int32Value();
+	int fd = info[0]->Int32Value();
 
 	struct sockaddr_in lookup;
 
@@ -183,25 +181,26 @@ static Handle<Value> natLookupSync(const Arguments& args) {
 	memset(&lookup, 0, len );
 
 
-	Local<Object> obj = Object::New();
+	Local<Object> obj = Nan::New<v8::Object>();
 
 	if (getsockopt( fd , IPPROTO_IP, SO_ORIGINAL_DST, &lookup, &len ) != 0){
-		obj->Set(String::New("error"), String::New( strerror( errno ) ) );
+		obj->Set(Nan::New("error").ToLocalChecked(), Nan::New( strerror( errno ) ).ToLocalChecked() );
 
 	} else {
-		obj->Set(String::New("ip"), Local<Value>::New(String::New(inet_ntoa(lookup.sin_addr))) );
-		obj->Set(String::New("port"), Local<Value>::New(Integer::New(ntohs(lookup.sin_port))) );
+		obj->Set(Nan::New("ip").ToLocalChecked() , Nan::New(inet_ntoa(lookup.sin_addr)).ToLocalChecked() );
+		obj->Set(Nan::New("port").ToLocalChecked() , Nan::New(ntohs(lookup.sin_port)) );
 	}
-
-	return scope.Close(obj);
+	
+	info.GetReturnValue().Set(obj);
+	
 }
 
 
-//extern "C" {
-	void init(Handle<Object> target) {
-		target->Set(String::NewSymbol("natLookup"), FunctionTemplate::New(natLookup)->GetFunction());
-		target->Set(String::NewSymbol("natLookupSync"), FunctionTemplate::New(natLookupSync)->GetFunction());
-	}
 
-	NODE_MODULE(natlookup, init);
-//}
+NAN_MODULE_INIT(init){
+	Nan::Set(target, Nan::New("natLookup").ToLocalChecked(),Nan::GetFunction(Nan::New<FunctionTemplate>(natLookup)).ToLocalChecked());
+	Nan::Set(target, Nan::New("natLookupSync").ToLocalChecked(),Nan::GetFunction(Nan::New<FunctionTemplate>(natLookupSync)).ToLocalChecked());
+}
+
+NODE_MODULE(natlookup, init);
+
